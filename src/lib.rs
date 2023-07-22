@@ -5,14 +5,12 @@ use near_sdk::store::{Vector, UnorderedMap};
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Slides {
-    unordered_map_vec: UnorderedMap<String, Vector<String>>,
     unordered_map_map: UnorderedMap<String, UnorderedMap<String, Vector<String>>>,
 }
 
 impl Default for Slides {
     fn default() -> Self {
         Self {
-            unordered_map_vec: UnorderedMap::new(b"c".to_vec()),
             unordered_map_map: UnorderedMap::new(b"d".to_vec()),
         }
     }
@@ -20,7 +18,6 @@ impl Default for Slides {
 
 #[derive(Serialize, Deserialize)]
 pub struct SerializableVector(Vec<String>);
-pub struct SerializableUnorderedMap(UnorderedMap<String, Vector<String>>);
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
@@ -28,74 +25,41 @@ pub enum StorageKeys {
     DeckName { deck_name_hash: CryptoHash },
 }
 
-
 #[near_bindgen]
 impl Slides {
     #[init]
     #[private]
     pub fn init() -> Self {
-        let unordered_map_vec: UnorderedMap<String, Vector<String>> = UnorderedMap::new(b"c".to_vec());
         let unordered_map_map: UnorderedMap<String, UnorderedMap<String, Vector<String>>> = UnorderedMap::new(b"d".to_vec());
-
-        Self { unordered_map_vec, unordered_map_map }
+        Self { unordered_map_map }
     }
 
-    // UnorderedMap<String, Vector<String>>
-    pub fn unordered_map_vec_init(&mut self, key: String) {
-        let caller: near_sdk::AccountId = env::signer_account_id();
-        assert_eq!(caller.to_string(), key, "Only owner");
-
-        let nested = self.unordered_map_vec.get_mut(&key);
-        if nested.is_none() {
-            self.unordered_map_vec.insert(key, Vector::new(b"c".to_vec()));
-        } else {
-            return;
-        }
-    }
-
-    pub fn unordered_map_vec_insert(&mut self, key: String, insert_value: String) {
-        let caller: near_sdk::AccountId = env::signer_account_id();
-        assert_eq!(caller.to_string(), key, "Only owner");
-
-        let mut nested = self.unordered_map_vec.get_mut(&key).unwrap();
-        nested.push(insert_value);
-    }
-
-    pub fn unordered_map_vec_extend(&mut self, key: String, insert_values: std::vec::Vec<String>) {
-        let caller: near_sdk::AccountId = env::signer_account_id();
-        assert_eq!(caller.to_string(), key, "Only owner");
-
-        let nested = self.unordered_map_vec.get_mut(&key).unwrap();
-        nested.extend(insert_values);
-    }
-    
-    pub fn unordered_map_vec_get_ser(&self, key: String) -> String {
-        let nested = self.unordered_map_vec.get(&key).unwrap(); 
-        let mut vec: Vec<String> = Vec::with_capacity(nested.len() as usize);
-        for element in nested.iter() {
-            vec.push(element.clone());
-        }
-        let serializable_vector = SerializableVector(vec);
-        let serialized_vector = serde_json::to_string(&serializable_vector).expect("Serialization error");
-        serialized_vector
-    }
-
-
-    // UnorderedMap<String, UnorderedMap<String, Vector<String>>>
     pub fn unordered_map_map_init(&mut self, key: String, deck_name: String) {
         let caller: near_sdk::AccountId = env::signer_account_id();
         assert_eq!(caller.to_string(), key, "Only owner");
 
-        let mut nested_map: UnorderedMap<String, Vector<String>> = UnorderedMap::new(StorageKeys::Account { 
-            account_hash: env::sha256_array(caller.as_bytes()) 
-        });
-        let deck_name_clone = deck_name.clone();
-        nested_map.insert(deck_name, Vector::new(StorageKeys::DeckName { 
-            deck_name_hash: env::sha256_array(deck_name_clone.as_bytes()) 
-        }));
-        self.unordered_map_map.insert(key, nested_map);
-    }
+        if !self.unordered_map_map.contains_key(&key) {
+            let nested_map: UnorderedMap<String, Vector<String>> =
+                UnorderedMap::new(StorageKeys::Account {
+                    account_hash: env::sha256_array(caller.as_bytes()),
+                });
 
+            self.unordered_map_map.insert(key.clone(), nested_map);
+        }
+
+        let nested_map: &mut UnorderedMap<String, Vector<String>> =
+            self.unordered_map_map.get_mut(&key).unwrap();
+
+        let deck_name_clone = deck_name.clone();
+        if !nested_map.contains_key(&deck_name) {
+            nested_map.insert(
+                deck_name,
+                Vector::new(StorageKeys::DeckName {
+                    deck_name_hash: env::sha256_array(deck_name_clone.as_bytes()),
+                }),
+            );
+        }
+    }
 
     pub fn unordered_map_map_insert(&mut self, key: String, deck_name: String, slide_cid: String) {
         let caller: near_sdk::AccountId = env::signer_account_id();
@@ -106,7 +70,6 @@ impl Slides {
 
         nested_vec.push(slide_cid);
     }
-
 
     pub fn unordered_map_map_extend(&mut self, key: String, deck_name: String, slide_cids: std::vec::Vec<String>) {
         let caller: near_sdk::AccountId = env::signer_account_id();
@@ -137,11 +100,10 @@ impl Slides {
     pub fn unordered_map_map_get_deck_names(&self, key: String) -> String {
         let nested_map: &UnorderedMap<String, Vector<String>> = self.unordered_map_map.get(&key).unwrap();
 
-        // println!("self.unordered_map_map: {:?}", self.unordered_map_map);
-        // println!("Complete nested_map: {:?}", SerializableUnorderedMap(nested_map));
         println!("nested_map.len(): {}", nested_map.len());
         let mut vec: Vec<String> = Vec::with_capacity(nested_map.len() as usize);
-        for (deck_name, _) in nested_map.iter() {
+        for deck_name in nested_map.keys() {
+            println!("{}", deck_name.clone());
             vec.push(deck_name.clone());
         }
         let serializable_vector = SerializableVector(vec);
@@ -150,53 +112,24 @@ impl Slides {
         
         serialized_vector
     }
+
+    pub fn get_length_of_nested_vec(&self, key: String, deck_name: String) -> Option<u32> {
+        self.unordered_map_map.get(&key).and_then(|nested_map| nested_map.get(&deck_name).map(|vector| vector.len()))
+    }
+
+    pub fn get_length_of_nested_map(&self, key: String) -> Option<u32> {
+        self.unordered_map_map.get(&key).map(|nested_map| nested_map.len())
+    }
 }
 
-// unit tests
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_map_vec() {
-        let mut contract: Slides = Slides::default();
-        contract.unordered_map_vec_init("bob.near".to_string());
-        contract.unordered_map_vec_insert("bob.near".to_string(), "insert 1".to_string());
-        contract.unordered_map_vec_insert("bob.near".to_string(), "insert 2".to_string());
-        contract.unordered_map_vec_insert("bob.near".to_string(), "insert 3".to_string());
-        assert_eq!(contract.unordered_map_vec_get_ser("bob.near".to_string()), "[\"insert 1\",\"insert 2\",\"insert 3\"]");
-    }
-
-    #[test]
-    #[should_panic]
-    fn panic_map_vec_init() {
-        let mut contract: Slides = Slides::default();
-        contract.unordered_map_vec_init("alice.near".to_string());
-    }
-
-    #[test]
-    #[should_panic]
-    fn panic_map_vec_insert() {
-        let mut contract: Slides = Slides::default();
-        contract.unordered_map_vec_init("bob.near".to_string());
-        contract.unordered_map_vec_insert("alice.near".to_string(), "insert 1".to_string());
-    }
-
-    #[test]
-    fn test_unordered_map_vec_extend() {
-        let mut contract: Slides = Slides::default();
-        contract.unordered_map_vec_init("bob.near".to_string());
-        contract.unordered_map_vec_insert("bob.near".to_string(), "0xFirstValue".to_string());
-
-        let vec: Vec<String> = vec!["0xSecondValue".to_string(), "0xThirdValue".to_string(), "0xFourthValue".to_string()];
-
-        contract.unordered_map_vec_extend("bob.near".to_string(),vec );
-        assert_eq!(contract.unordered_map_vec_get_ser("bob.near".to_string()), "[\"0xFirstValue\",\"0xSecondValue\",\"0xThirdValue\",\"0xFourthValue\"]");
-    }
-
-    #[test]
     fn test_unordered_map_map() {
         let mut contract: Slides = Slides::default();
+
         contract.unordered_map_map_init("bob.near".to_string(), "deck 1".to_string());
         contract.unordered_map_map_insert("bob.near".to_string(), "deck 1".to_string(), "slide 1".to_string());
         contract.unordered_map_map_insert("bob.near".to_string(), "deck 1".to_string(), "slide 2".to_string());
@@ -212,10 +145,18 @@ mod tests {
 
         contract.unordered_map_map_init("bob.near".to_string(), "deck 1".to_string());
         contract.unordered_map_map_insert("bob.near".to_string(), "deck 1".to_string(), "slide A".to_string());
-
         let vec: Vec<String> = vec!["slide B".to_string(), "slide C".to_string(), "slide D".to_string()];
         contract.unordered_map_map_extend("bob.near".to_string(), "deck 1".to_string(), vec);
+        
         assert_eq!(contract.unordered_map_map_get_ser("bob.near".to_string(), "deck 1".to_string()), "[\"slide A\",\"slide B\",\"slide C\",\"slide D\"]");
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_map_map_insert() {
+        let mut contract: Slides = Slides::default();
+        contract.unordered_map_map_init("bob.near".to_string(), "deck 1".to_string());
+        contract.unordered_map_map_insert("alice.near".to_string(), "deck 1".to_string(), "slide 1".to_string());
     }
 
     #[test]
@@ -233,11 +174,7 @@ mod tests {
         contract.unordered_map_map_init("bob.near".to_string(), "deck 3".to_string());
         contract.unordered_map_map_insert("bob.near".to_string(), "deck 3".to_string(), "slide 3A".to_string());
 
-        println!("\ndeck 1: {}", contract.unordered_map_map_get_ser("bob.near".to_string(), "deck 1".to_string()));
-        println!("\ndeck 2: {}", contract.unordered_map_map_get_ser("bob.near".to_string(), "deck 2".to_string()));
-        println!("\ndeck 3: {}", contract.unordered_map_map_get_ser("bob.near".to_string(), "deck 3".to_string()));
-
-        println!("all decks: {}", contract.unordered_map_map_get_deck_names("bob.near".to_string()));
+        assert_eq!(contract.unordered_map_map_get_deck_names("bob.near".to_string()), "[\"deck 1\",\"deck 2\",\"deck 3\"]");
     }
 
 }
