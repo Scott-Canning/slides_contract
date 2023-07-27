@@ -83,7 +83,6 @@ impl Slides {
         nested_vec.extend(slide_cids);
     }
 
-
     pub fn get_slides(&self, key: String, deck_name: String) -> String {
         let nested_map: &UnorderedMap<String, Vector<String>> = self.deck_map.get(&key).unwrap();
         let nested_vec: &Vector<String> = nested_map.get(&deck_name).unwrap();
@@ -103,7 +102,6 @@ impl Slides {
         }
     }
     
-
     pub fn get_deck_names(&self, key: String) -> String {
         let nested_map: &UnorderedMap<String, Vector<String>> = self.deck_map.get(&key).unwrap();
 
@@ -116,6 +114,18 @@ impl Slides {
             .expect("Serialization error");
         
         serialized_vector
+    }
+
+    pub fn delete_deck(&mut self, key: String, deck_name: String) {
+        let caller: near_sdk::AccountId = env::signer_account_id();
+        assert_eq!(caller.to_string(), key, "Only owner");
+
+        let nested_map: &mut UnorderedMap<String, Vector<String>> = 
+            self.deck_map.get_mut(&key).unwrap();
+        let nested_vec: &mut Vector<String> = nested_map.get_mut(&deck_name).unwrap();
+        
+        nested_vec.clear();
+        nested_map.remove(&deck_name);
     }
 
     pub fn get_length_of_nested_vec(&self, key: String, deck_name: String) -> Option<u32> {
@@ -152,7 +162,7 @@ mod tests {
         contract.insert_slide("bob.near".to_string(), "deck 1".to_string(), "slide A".to_string());
         let vec: Vec<String> = vec!["slide B".to_string(), "slide C".to_string(), "slide D".to_string()];
         contract.insert_slides("bob.near".to_string(), "deck 1".to_string(), vec);
-        
+
         assert_eq!(contract.get_slides("bob.near".to_string(), "deck 1".to_string()), "[\"slide A\",\"slide B\",\"slide C\",\"slide D\"]");
     }
 
@@ -181,5 +191,45 @@ mod tests {
         contract.insert_slide("bob.near".to_string(), "deck 3".to_string(), "slide 3A".to_string());
 
         assert_eq!(contract.get_deck_names("bob.near".to_string()), "[\"deck 1\",\"deck 2\",\"deck 3\"]");        
+    }
+
+    #[test]
+    fn delete_deck() {
+        let mut contract: Slides = Slides::default();
+
+        contract.create_new_deck("bob.near".to_string(), "deck 1".to_string());
+        contract.insert_slide("bob.near".to_string(), "deck 1".to_string(), "slide 1A".to_string());
+        let vec: Vec<String> = vec!["slide 1B".to_string(), "slide 1C".to_string(), "slide 1D".to_string()];
+        contract.insert_slides("bob.near".to_string(), "deck 1".to_string(), vec);
+
+        contract.create_new_deck("bob.near".to_string(), "deck 2".to_string());
+        contract.insert_slide("bob.near".to_string(), "deck 2".to_string(), "slide 2A".to_string());
+
+        contract.create_new_deck("bob.near".to_string(), "deck 3".to_string());
+        contract.insert_slide("bob.near".to_string(), "deck 3".to_string(), "slide 3A".to_string());
+
+        contract.delete_deck("bob.near".to_string(), "deck 1".to_string());
+
+        assert_eq!(contract.get_deck_names("bob.near".to_string()), "[\"deck 2\",\"deck 3\"]");
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_delete_deck() {
+        let mut contract: Slides = Slides::default();
+
+        contract.create_new_deck("bob.near".to_string(), "deck 1".to_string());
+        contract.insert_slide("bob.near".to_string(), "deck 1".to_string(), "slide 1A".to_string());
+        let vec: Vec<String> = vec!["slide 1B".to_string(), "slide 1C".to_string(), "slide 1D".to_string()];
+        contract.insert_slides("bob.near".to_string(), "deck 1".to_string(), vec);
+
+        contract.create_new_deck("bob.near".to_string(), "deck 2".to_string());
+        contract.insert_slide("bob.near".to_string(), "deck 2".to_string(), "slide 2A".to_string());
+
+        contract.create_new_deck("bob.near".to_string(), "deck 3".to_string());
+        contract.insert_slide("bob.near".to_string(), "deck 3".to_string(), "slide 3A".to_string());
+
+        contract.delete_deck("bob.near".to_string(), "deck 1".to_string());
+        contract.get_slides("bob.near".to_string(), "deck 1".to_string());
     }
 }
