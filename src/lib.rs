@@ -104,7 +104,7 @@ impl Slides {
     }
     
 
-    pub fn unordered_map_map_get_deck_names(&self, key: String) -> String {
+    pub fn get_deck_names(&self, key: String) -> String {
         let nested_map: &UnorderedMap<String, Vector<String>> = self.deck_map.get(&key).unwrap();
 
         let mut vec: Vec<String> = Vec::with_capacity(nested_map.len() as usize);
@@ -132,7 +132,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_unordered_map_map() {
+    fn test_create_insert_get() {
         let mut contract: Slides = Slides::default();
 
         contract.create_new_deck("bob.near".to_string(), "deck 1".to_string());
@@ -145,26 +145,28 @@ mod tests {
     }
 
     #[test]
-    fn test_unordered_map_map_extend() {
+    fn test_insert_slides() {
         let mut contract: Slides = Slides::default();
 
         contract.create_new_deck("bob.near".to_string(), "deck 1".to_string());
         contract.insert_slide("bob.near".to_string(), "deck 1".to_string(), "slide A".to_string());
         let vec: Vec<String> = vec!["slide B".to_string(), "slide C".to_string(), "slide D".to_string()];
         contract.insert_slides("bob.near".to_string(), "deck 1".to_string(), vec);
+        
         assert_eq!(contract.get_slides("bob.near".to_string(), "deck 1".to_string()), "[\"slide A\",\"slide B\",\"slide C\",\"slide D\"]");
     }
 
     #[test]
     #[should_panic]
-    fn panic_map_map_insert() {
+    fn panic_insert_slide() {
         let mut contract: Slides = Slides::default();
+
         contract.create_new_deck("bob.near".to_string(), "deck 1".to_string());
         contract.insert_slide("alice.near".to_string(), "deck 1".to_string(), "slide 1".to_string());
     }
 
     #[test]
-    fn unordered_map_map_get_deck_names() {
+    fn get_deck_names() {
         let mut contract: Slides = Slides::default();
 
         contract.create_new_deck("bob.near".to_string(), "deck 1".to_string());
@@ -178,6 +180,6 @@ mod tests {
         contract.create_new_deck("bob.near".to_string(), "deck 3".to_string());
         contract.insert_slide("bob.near".to_string(), "deck 3".to_string(), "slide 3A".to_string());
 
-        assert_eq!(contract.unordered_map_map_get_deck_names("bob.near".to_string()), "[\"deck 1\",\"deck 2\",\"deck 3\"]");        
+        assert_eq!(contract.get_deck_names("bob.near".to_string()), "[\"deck 1\",\"deck 2\",\"deck 3\"]");        
     }
 }
